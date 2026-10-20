@@ -1,8 +1,233 @@
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>pendulum MVP</title></head>
-<body style="background:#1a1a24;color:#fff">
-<canvas id="cv" width="640" height="480"></canvas>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>单摆物理模拟器 · 人机协同程序设计 Week05</title>
+<style>
+  :root {
+    --bg: #1a1a24;
+    --panel: #23233a;
+    --text: #e8e8f2;
+    --muted: #8a8aa8;
+    --accent: #5eead4;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  canvas {
+    background: radial-gradient(ellipse at 50% 30%, #2a2a44 0%, #1a1a24 70%);
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(94, 234, 212, 0.12);
+  }
+  .panel {
+    margin-top: 16px;
+    background: var(--panel);
+    padding: 16px 20px;
+    border-radius: 12px;
+    width: 640px;
+    max-width: 100%;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .row label { color: var(--muted); width: 80px; }
+  .row input[type=range] { flex: 1; margin: 0 12px; accent-color: var(--accent); }
+  .row .val {
+    width: 70px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  button {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    color: #1a1a24;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: transform 0.1s;
+  }
+  button:hover { transform: translateY(-1px); }
+  button:active { transform: translateY(0); }
+  .formula {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    font-family: "SF Mono", Menlo, monospace;
+  }
+</style>
+</head>
+<body>
+  <h1>单摆物理模拟器</h1>
+  <div class="sub">θ″ = −(g/L)·sin(θ) − c·θ′ · Week05 Lab · 苑一新 5715126064</div>
+
+  <canvas id="cv" width="640" height="480"></canvas>
+
+  <div class="panel">
+    <div class="row">
+      <label>摆长 L</label>
+      <input type="range" id="lenSlider" min="100" max="350" step="1" value="200">
+      <span class="val" id="lenVal">200 px</span>
+    </div>
+    <div class="row">
+      <label>重力 g</label>
+      <input type="range" id="gravSlider" min="1" max="25" step="0.1" value="9.8">
+      <span class="val" id="gravVal">9.8</span>
+    </div>
+    <div class="row">
+      <label>阻尼 c</label>
+      <input type="range" id="dampSlider" min="0" max="0.01" step="0.0001" value="0.001">
+      <span class="val" id="dampVal">0.0010</span>
+    </div>
+    <button id="resetBtn">重置摆动（回到 45°）</button>
+    <div class="formula">requestAnimationFrame 驱动 · 纯 Canvas 渲染 · 摆球发光效果</div>
+  </div>
+
 <script>
-// MVP: 基础单摆渲染（任务二基线）
-console.log("pendulum MVP loaded");
-</script></body></html>
+// ====== 所有函数都显式挂到 window，避免 onclick 作用域里找不到 → 修复 resetAnimation ReferenceError ======
+(function () {
+  const canvas = document.getElementById('cv');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pivotX = W / 2;
+  const pivotY = 80;
+
+  // 状态
+  const state = {
+    L: 200,          // 摆长 px
+    g: 9.8,          // 重力
+    damping: 0.001,  // 阻尼系数
+    theta: 45 * Math.PI / 180,  // 当前摆角（弧度）
+    omega: 0,                    // 角速度
+  };
+
+  // 初始状态快照（重置时用）
+  const INITIAL = { theta: 45 * Math.PI / 180, omega: 0 };
+
+  function resetAnimation() {
+    state.theta = INITIAL.theta;
+    state.omega = INITIAL.omega;
+  }
+  // 显式暴露给 inline onclick / 全局作用域
+  window.resetAnimation = resetAnimation;
+
+  // 物理积分：半隐式欧拉
+  function step(dt) {
+    // θ″ = -(g/L) sin(θ) - c · ω
+    const alpha = -(state.g / state.L) * Math.sin(state.theta) - state.damping * state.omega;
+    state.omega += alpha * dt;
+    state.theta += state.omega * dt;
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    // 悬挂点
+    ctx.beginPath();
+    ctx.arc(pivotX, pivotY, 6, 0, Math.PI * 2);
+    ctx.fillStyle = '#8a8aa8';
+    ctx.fill();
+
+    // 摆球坐标
+    const bx = pivotX + state.L * Math.sin(state.theta);
+    const by = pivotY + state.L * Math.cos(state.theta);
+
+    // 摆线
+    ctx.beginPath();
+    ctx.moveTo(pivotX, pivotY);
+    ctx.lineTo(bx, by);
+    ctx.strokeStyle = '#c8c8e0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 摆球（带发光效果）
+    ctx.save();
+    ctx.shadowColor = '#5eead4';
+    ctx.shadowBlur = 25;
+    const grad = ctx.createRadialGradient(bx - 4, by - 4, 2, bx, by, 16);
+    grad.addColorStop(0, '#a7f3d0');
+    grad.addColorStop(1, '#14b8a6');
+    ctx.beginPath();
+    ctx.arc(bx, by, 14, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+
+    // 拖尾（淡线）
+    ctx.beginPath();
+    const trailX = pivotX + (state.L + 30) * Math.sin(state.theta);
+    const trailY = pivotY + (state.L + 30) * Math.cos(state.theta);
+    ctx.moveTo(pivotX, pivotY);
+    ctx.lineTo(trailX, trailY);
+    ctx.strokeStyle = 'rgba(94,234,212,0.15)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    // dt 归一化到 ~60fps 步长（=1），避免切后台回来跳变
+    const dt = Math.min((now - last) / 16.67, 3);
+    last = now;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ====== 滑块绑定 ======
+  const lenS = document.getElementById('lenSlider');
+  const gravS = document.getElementById('gravSlider');
+  const dampS = document.getElementById('dampSlider');
+  const lenV = document.getElementById('lenVal');
+  const gravV = document.getElementById('gravVal');
+  const dampV = document.getElementById('dampVal');
+
+  lenS.addEventListener('input', () => {
+    state.L = parseFloat(lenS.value);
+    lenV.textContent = state.L + ' px';
+  });
+  gravS.addEventListener('input', () => {
+    state.g = parseFloat(gravS.value);
+    gravV.textContent = state.g.toFixed(1);
+  });
+  dampS.addEventListener('input', () => {
+    state.damping = parseFloat(dampS.value);
+    dampV.textContent = state.damping.toFixed(4);
+  });
+
+  // 重置按钮
+  document.getElementById('resetBtn').addEventListener('click', resetAnimation);
+
+  // 启动
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
