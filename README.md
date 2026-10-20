@@ -7,7 +7,7 @@
 
 - **我的 GitHub 主页**：https://github.com/yuanyixin2008
 - **课程作品集主仓库**：https://github.com/yuanyixin2008/portfolio
-- **本实验提交目录**：https://github.com/yuanyixin2008/portfolio/tree/main/week05_pendulum_sim
+- **本实验独立仓库（Week05）**：https://github.com/yuanyixin2008/pendulum-week05
 
 ## 📦 实验内容
 
