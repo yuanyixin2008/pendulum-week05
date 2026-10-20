@@ -64,3 +64,9 @@
 ├── README.md     # 本说明文件
 └── .git/         # 提交历史（至少 3 次 commit）
 ```
+
+## 🐛 Bug 修复记录（任务四）
+
+- **现象**：点击"重置"按钮后单摆停止运动，控制台报 `Uncaught ReferenceError: resetAnimation is not defined at HTMLButtonElement.onclick`。
+- **根因**：`resetAnimation` 定义在 IIFE 闭包内部，inline `onclick` 从全局作用域找不到它。
+- **修复**：通过 `window.resetAnimation = resetAnimation` 显式暴露到全局，并改用 `addEventListener` 绑定按钮事件。修复后控制台 0 报错。
